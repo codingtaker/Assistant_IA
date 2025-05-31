@@ -153,21 +153,21 @@ Généré par Assistant Pitch Business
       
       // Configuration
       const pageWidth = pdf.internal.pageSize.width;
-      const margin = 20;
-      const lineHeight = 8;
-      let currentY = 30;
+      const margin = 15;
+      const lineHeight = 6;
+      let currentY = 20;
 
       // Titre principal
       pdf.setFontSize(20);
       pdf.setFont("helvetica", "bold");
       pdf.text(`PITCH BUSINESS - ${projectData.projectName}`, margin, currentY);
-      currentY += lineHeight * 2;
+      currentY += lineHeight * 3;
 
       // Date
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "normal");
       pdf.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, margin, currentY);
-      currentY += lineHeight * 2;
+      currentY += lineHeight * 3;
 
       // Sections du pitch
       pitchSections.forEach((section) => {
@@ -186,7 +186,7 @@ Généré par Assistant Pitch Business
         splitText.forEach((line: string) => {
           if (currentY > 270) { // Nouvelle page si nécessaire
             pdf.addPage();
-            currentY = 20;
+            currentY = 10;
           }
           pdf.text(line, margin, currentY);
           currentY += lineHeight;
