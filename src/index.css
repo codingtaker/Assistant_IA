@@ -89,3 +89,15 @@
     text-decoration: none !important;
   }
 }
+
+/* ── Bootstrap override layer ────────────────────────────────────────────────
+   Bootstrap is imported before this file, so these rules always win.        */
+@layer utilities {
+  a,
+  a:hover,
+  a:focus,
+  a:active {
+    text-decoration: none !important;
+    color: inherit;
+  }
+}
