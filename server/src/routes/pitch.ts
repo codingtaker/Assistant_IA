@@ -71,16 +71,22 @@ router.post(
   pitchRateLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      console.info("[POST /generate] body received:", JSON.stringify(req.body, null, 2));
+
       const parseResult = PitchRequestSchema.safeParse(req.body);
       if (!parseResult.success) {
+        const flat = parseResult.error.flatten();
+        console.warn("[POST /generate] Validation FAILED:", JSON.stringify(flat, null, 2));
         res.status(400).json({
           error: {
             message: "Invalid request body",
-            details: parseResult.error.flatten(),
+            details: flat,
           },
         });
         return;
       }
+
+      console.info("[POST /generate] Validation OK — provider:", parseResult.data.provider);
 
       const body = parseResult.data as PitchRequestBody;
       const { systemPrompt, userPrompt } = buildPrompts(body);
