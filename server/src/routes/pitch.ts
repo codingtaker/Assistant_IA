@@ -14,7 +14,7 @@ const PitchRequestSchema = z.object({
   description: z.string().min(10).max(1000),
   targetMarket: z.string().min(5).max(500),
   uniqueValue: z.string().min(5).max(500),
-  features: z.string().max(500).optional(),
+  features: z.string().max(2000).optional(),
   template: z.enum(["lean-canvas", "elevator-pitch", "investor-pitch", "executive-summary"]),
   provider: z.string().min(1).max(64).optional(),
   language: z.enum(["en", "fr"]).optional(),
