@@ -12,8 +12,8 @@ import type { PitchFormValues, GeneratedPitch } from "@/types";
 
 /** Fallback providers shown while the backend /providers call is in-flight or fails. */
 const FALLBACK_PROVIDERS: ProviderInfo[] = [
-  { id: "openai",    label: "OpenAI",    description: "GPT-4o", isLocal: false },
-  { id: "anthropic", label: "Anthropic", description: "Claude 3.5 Sonnet", isLocal: false },
+  { id: "openai",    label: "OpenAI",    description: "GPT-4o",            isLocal: false, configured: true },
+  { id: "anthropic", label: "Anthropic", description: "Claude 3.5 Sonnet", isLocal: false, configured: true },
 ];
 
 export function HomePage() {

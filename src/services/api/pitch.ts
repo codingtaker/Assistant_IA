@@ -16,11 +16,13 @@ export interface ProviderInfo {
   description: string;
   /** True for providers running locally (Ollama etc.). */
   isLocal: boolean;
+  /** True when an API key is present on the server — false means the provider is known but not yet configured. */
+  configured: boolean;
 }
 
 /** Shape of the GET /pitch/providers response body. */
 export interface ProvidersResponse {
-  /** List of configured and available providers with display metadata. */
+  /** All known providers — configured ones are ready to use; unconfigured ones are shown as disabled in the UI. */
   providers: ProviderInfo[];
 }
 
@@ -41,8 +43,9 @@ export const pitchApi = {
     }),
 
   /**
-   * Fetch the list of AI providers currently configured on the backend.
-   * Used on page load to populate the provider selector in the form.
+   * Fetch all known AI providers from the backend.
+   * Configured providers (API key present) have configured=true.
+   * Unconfigured providers are shown as disabled in the form.
    */
   getProviders: () =>
     apiClient.get<ProvidersResponse>("/pitch/providers"),
