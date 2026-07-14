@@ -77,13 +77,13 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
 
 /**
  * Convert a provider ID into the env-var prefix used to look up its settings.
- * "openai" → "OPENAI", "my-llm-2" → "MY_LLM_2".
+ * "openai" -> "OPENAI", "my-llm-2" -> "MY_LLM_2".
  */
 function envKey(id: string): string {
   return id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
 }
 
-/** Parse "Header1: v1, Header2: v2" → { Header1: "v1", Header2: "v2" }. */
+/** Parse "Header1: v1, Header2: v2" -> { Header1: "v1", Header2: "v2" }. */
 function parseHeaders(raw: string | undefined): Record<string, string> | undefined {
   if (!raw) return undefined;
   const entries = raw
@@ -123,7 +123,7 @@ function buildProvider(
     parseHeaders(env[`${key}_HEADERS`]) ?? preset?.defaultHeaders;
 
   if (!apiKey) {
-    console.warn(`[AI] Provider "${id}" skipped: missing ${key}_API_KEY`);
+    // Silently skip — provider is listed in presets but no key configured
     return null;
   }
   if (!baseURL) {
@@ -159,16 +159,22 @@ export interface ProviderRegistry {
  * Discover and instantiate every configured provider from environment variables.
  *
  * Discovery order:
- *   1. Built-in `openai` and `anthropic` are always registered (they self-check their API keys).
- *   2. `EXTRA_PROVIDERS=comma,separated,list` registers extra providers using presets or custom env.
- *   3. `PROVIDER_FALLBACK_ORDER=a,b,c` overrides the fallback order (default = insertion order).
- *   4. `DEFAULT_AI_PROVIDER=<id>` selects the primary provider (default = "openai").
+ *   1. `openai` and `anthropic` are tried first (built-in providers).
+ *   2. All remaining PROVIDER_PRESETS are auto-discovered: if <ID>_API_KEY is
+ *      present in the environment the provider is registered automatically.
+ *      No need to list anything in EXTRA_PROVIDERS for preset providers.
+ *   3. `EXTRA_PROVIDERS=comma,separated,list` can add non-preset custom providers.
+ *   4. `PROVIDER_FALLBACK_ORDER=a,b,c` overrides the fallback order.
+ *   5. `DEFAULT_AI_PROVIDER=<id>` selects the primary provider (default: first available).
  */
 export function buildProviderRegistry(
   env: NodeJS.ProcessEnv = process.env
 ): ProviderRegistry {
-  // 1 + 2: gather all provider ids to try, preserving order and de-duplicating.
+  // 1. Start with built-ins, then all presets, then any EXTRA_PROVIDERS.
   const orderedIds: string[] = ["openai", "anthropic"];
+  for (const id of Object.keys(PROVIDER_PRESETS)) {
+    if (!orderedIds.includes(id)) orderedIds.push(id);
+  }
   const extras = (env.EXTRA_PROVIDERS ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -185,12 +191,12 @@ export function buildProviderRegistry(
 
     if (provider.isAvailable()) {
       const preset = PROVIDER_PRESETS[id];
-      const info = preset?.baseURL ? ` → ${preset.baseURL}` : "";
+      const info = preset?.baseURL ? ` -> ${preset.baseURL}` : "";
       console.info(`[AI] Registered provider "${id}"${info}`);
     }
   }
 
-  // 3: explicit fallback order overrides default (insertion order of *available* providers).
+  // 2. Explicit fallback order overrides default (insertion order of available providers).
   const rawOrder = (env.PROVIDER_FALLBACK_ORDER ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -202,7 +208,7 @@ export function buildProviderRegistry(
     ? rawOrder.filter((id) => availableIds.includes(id))
     : availableIds;
 
-  // 4: default provider.
+  // 3. Default provider.
   const defaultProvider = env.DEFAULT_AI_PROVIDER ?? fallbackOrder[0] ?? "openai";
 
   return { providers, defaultProvider, fallbackOrder };

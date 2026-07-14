@@ -39,15 +39,15 @@ const PROVIDER_DISPLAY: Record<string, { label: string; description: string }> =
   rodium:     { label: "RodiumAI",   description: "Claude via RodiumAI proxy" },
 };
 
-// GET /api/pitch/providers — list available providers with display metadata
+// GET /api/pitch/providers — list all known providers; configured=true when an API key is present
 router.get("/providers", (_req: Request, res: Response) => {
-  const available = aiService.getAvailableProviders();
+  const configured = new Set(aiService.getAvailableProviders());
 
-  const providers = available.map((id) => {
+  const providers = Object.keys(PROVIDER_PRESETS).map((id) => {
     const display = PROVIDER_DISPLAY[id];
     const preset = PROVIDER_PRESETS[id];
     return {
       id,
-      label: display?.label ?? id,
+      label:       display?.label       ?? id,
       description: display?.description ?? preset?.defaultModel ?? id,
-      isLocal: id === "ollama" || (preset as { baseURL?: string } | undefined)?.baseURL
+      isLocal:     id =

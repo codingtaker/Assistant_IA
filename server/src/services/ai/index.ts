@@ -58,7 +58,7 @@ const BILLING_ERROR_CODES = new Set([
  */
 function isBillingError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
-  const anyErr = err as { status?: number; code?: string; type?: string; message?: string };
+  const anyErr = err as { status?: number; code?: string; type?: string; message?: string; error?: unknown };
 
   // HTTP 402 Payment Required (Anthropic credit exhausted)
   if (anyErr.status === 402) return true;
@@ -67,16 +67,27 @@ function isBillingError(err: unknown): boolean {
   if (typeof anyErr.code === "string" && BILLING_ERROR_CODES.has(anyErr.code)) return true;
   if (typeof anyErr.type === "string" && BILLING_ERROR_CODES.has(anyErr.type)) return true;
 
-  // Fallback: scan the message for well-known phrases
-  if (typeof anyErr.message === "string" &&
-    /insufficient.*(quota|credit|fund|balance)|out of credit|billing limit|payment required/i
-      .test(anyErr.message)
-  ) {
-    return true;
+  // Anthropic SDK wraps the parsed body in err.error — check nested message/type
+  if (anyErr.error && typeof anyErr.error === "object") {
+    const body = anyErr.error as { error?: { type?: string; message?: string } };
+    if (body.error?.type && BILLING_ERROR_CODES.has(body.error.type)) return true;
+    if (typeof body.error?.message === "string" && BILLING_MESSAGE_RE.test(body.error.message)) return true;
   }
+
+  // Fallback: scan the serialised error message for well-known billing phrases
+  if (typeof anyErr.message === "string" && BILLING_MESSAGE_RE.test(anyErr.message)) return true;
 
   return false;
 }
+
+/**
+ * Regex covering billing-related phrases across providers:
+ *   - OpenAI:     "You exceeded your current quota"
+ *   - Anthropic:  "Your credit balance is too low"  /  "Plans & Billing"
+ *   - Groq/etc.:  "out of credits", "billing limit", "payment required"
+ */
+const BILLING_MESSAGE_RE =
+  /insufficient.*(quota|credit|fund|balance)|credit balance|balance is too low|out of credit|billing limit|payment required|plans.*billing|upgrade.*credit|purchase.*credit/i;
 
 /**
  * Decide whether an error is transient and worth retrying on another provider.
@@ -229,26 +240,4 @@ export class AIService {
       const started = Date.now();
 
       console.info(
-        `[AI ${requestId}] ${isFallback ? "Fallback attempt" : "Attempt"} ${i + 1}/${order.length} → provider="${name}"`
-      );
-
-      try {
-        const result = await provider.complete(request);
-        const durationMs = Date.now() - started;
-
-        if (isFallback) {
-          console.warn(
-            `[AI ${requestId}] Recovered via fallback "${name}" after ${attempts.length} failure(s) (${durationMs}ms)`
-          );
-        } else {
-          console.info(
-            `[AI ${requestId}] Success via "${name}" model="${result.model}" (${durationMs}ms, tokens=${result.tokensUsed?.total ?? "n/a"})`
-          );
-        }
-        return result;
-      } catch (err) {
-        const durationMs = Date.now() - started;
-        const { status, code, message } = describeError(err);
-        const retryable = isRetryableError(err);
-
-        attempts.push({ provider: name, durationMs, status, code, message, re
+        `[AI ${requestId}] ${isFallback ? "Fallback attempt" : "Attempt"} ${i + 1}/
