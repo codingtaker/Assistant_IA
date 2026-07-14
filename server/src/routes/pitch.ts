@@ -39,15 +39,84 @@ const PROVIDER_DISPLAY: Record<string, { label: string; description: string }> =
   rodium:     { label: "RodiumAI",   description: "Claude via RodiumAI proxy" },
 };
 
-// GET /api/pitch/providers — list available providers with display metadata
+// GET /api/pitch/providers — list ALL known providers with display metadata and a `configured` flag
 router.get("/providers", (_req: Request, res: Response) => {
-  const available = aiService.getAvailableProviders();
+  const availableSet = new Set(aiService.getAvailableProviders());
 
-  const providers = available.map((id) => {
+  // Union of preset IDs and any provider registered from EXTRA_PROVIDERS (unknown to presets).
+  const allIds = Array.from(
+    new Set([...Object.keys(PROVIDER_PRESETS), ...availableSet])
+  );
+
+  const providers = allIds.map((id) => {
     const display = PROVIDER_DISPLAY[id];
     const preset = PROVIDER_PRESETS[id];
     return {
       id,
       label: display?.label ?? id,
       description: display?.description ?? preset?.defaultModel ?? id,
-      isLocal: id === "ollama" || (preset as { baseURL?: string } | undefined)?.baseURL
+      isLocal:
+        id === "ollama" ||
+        ((preset as { baseURL?: string } | undefined)?.baseURL?.includes("localhost") ?? false),
+      configured: availableSet.has(id),
+    };
+  });
+
+  res.json({ providers });
+});
+
+// POST /api/pitch/generate — generate a pitch
+router.post(
+  "/generate",
+  pitchRateLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parseResult = PitchRequestSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        res.status(400).json({
+          error: {
+            message: "Invalid request body",
+            details: parseResult.error.flatten(),
+          },
+        });
+        return;
+      }
+
+      const body = parseResult.data as PitchRequestBody;
+      const { systemPrompt, userPrompt } = buildPrompts(body);
+
+      const aiResponse = await aiService.complete(
+        { systemPrompt, userPrompt, maxTokens: 2048, temperature: 0.7 },
+        body.provider
+      );
+
+      // Parse the JSON returned by the LLM
+      let parsed: { sections: { title: string; content: string }[] };
+      try {
+        parsed = JSON.parse(aiResponse.content);
+      } catch {
+        // LLM returned non-JSON — wrap as single section
+        parsed = {
+          sections: [{ title: "Generated Pitch", content: aiResponse.content }],
+        };
+      }
+
+      const pitch: GeneratedPitch = {
+        id: randomUUID(),
+        template: body.template,
+        provider: aiResponse.provider as GeneratedPitch["provider"],
+        model: aiResponse.model,
+        projectName: body.projectName,
+        sections: parsed.sections,
+        rawContent: aiResponse.content,
+        generatedAt: new Date().toISOString(),
+      };
+
+      res.status(201).json({ pitch });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+export default router;

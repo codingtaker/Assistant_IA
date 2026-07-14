@@ -220,7 +220,7 @@ function ProviderButton({ provider, selected, onSelect }: ProviderButtonProps) {
       disabled={isDisabled}
       title={
         isDisabled
-          ? `Add ${provider.label.toUpperCase()}_API_KEY to .env to enable`
+          ? `Add ${provider.id.toUpperCase()}_API_KEY to .env to enable`
           : provider.description
       }
       className={cn(
