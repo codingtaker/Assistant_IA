@@ -1,7 +1,5 @@
 import type { AIProvider, AICompletionRequest, AICompletionResponse } from "./types";
-import { OpenAIProvider } from "./providers/openai";
-import { AnthropicProvider } from "./providers/anthropic";
-import { OpenAICompatibleProvider } from "./providers/openai-compatible";
+import { buildProviderRegistry, type ProviderRegistry } from "./providers/registry";
 import { randomUUID } from "crypto";
 
 type ProviderName = string;
@@ -80,97 +78,53 @@ function describeError(err: unknown): { status?: number; code?: string; message:
   };
 }
 
-class AIService {
-  private providers: Map<ProviderName, AIProvider>;
-  private defaultProvider: ProviderName;
+/**
+ * Orchestrates AI completion across a set of providers with automatic fallback
+ * on transient errors. Provider discovery lives in `providers/registry.ts` — this
+ * class only handles routing, fallback logic, and observability.
+ */
+export class AIService {
+  private readonly providers: Map<ProviderName, AIProvider>;
+  private readonly defaultProvider: ProviderName;
+  private readonly fallbackOrder: ProviderName[];
 
-  constructor() {
-    this.providers = new Map();
-    this.providers.set("openai", new OpenAIProvider());
-    this.providers.set("anthropic", new AnthropicProvider());
-
-    // Register extra OpenAI-compatible providers declared via env vars.
-    // Example:
-    //   EXTRA_PROVIDERS=rodium,groq,openrouter
-    // RODIUM_API_KEY=... 
-    // RODIUM_BASE_URL=https://api.rodiumai.io/v1 
-    // RODIUM_MODEL=anthropic/claude-opus-4-7
-    //   GROQ_API_KEY=... GROQ_BASE_URL=https://api.groq.com/openai/v1 GROQ_MODEL=llama-3.3-70b-versatile
-    this.registerExtraProviders();
-
-    const envDefault = process.env.DEFAULT_AI_PROVIDER as ProviderName | undefined;
-    this.defaultProvider = envDefault ?? "openai";
+  constructor(registry: ProviderRegistry) {
+    this.providers = registry.providers;
+    this.defaultProvider = registry.defaultProvider;
+    this.fallbackOrder = registry.fallbackOrder;
   }
 
-  private registerExtraProviders(): void {
-    const list = (process.env.EXTRA_PROVIDERS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    for (const id of list) {
-      const upper = id.toUpperCase().replace(/[^A-Z0-9]/g, "_");
-      const apiKey = process.env[`${upper}_API_KEY`];
-      const baseURL = process.env[`${upper}_BASE_URL`];
-      const defaultModel = process.env[`${upper}_MODEL`];
-
-      if (!apiKey) {
-        console.warn(
-          `[AI] Extra provider "${id}" skipped: missing ${upper}_API_KEY`
-        );
-        continue;
-      }
-      if (!baseURL) {
-        console.warn(
-          `[AI] Extra provider "${id}" skipped: missing ${upper}_BASE_URL`
-        );
-        continue;
-      }
-      if (!defaultModel) {
-        console.warn(
-          `[AI] Extra provider "${id}" skipped: missing ${upper}_MODEL`
-        );
-        continue;
-      }
-
-      if (this.providers.has(id)) {
-        console.warn(
-          `[AI] Extra provider "${id}" overrides a built-in with the same name`
-        );
-      }
-
-      // Optional extra headers (comma-separated: EXTRA_HEADERS_XXX="Key1: val, Key2: val")
-      const rawHeaders = process.env[`${upper}_HEADERS`];
-      const defaultHeaders = rawHeaders
-        ? Object.fromEntries(
-            rawHeaders
-              .split(",")
-              .map((h) => h.split(":").map((s) => s.trim()))
-              .filter(([k, v]) => k && v)
-          )
-        : undefined;
-
-      this.providers.set(
-        id,
-        new OpenAICompatibleProvider({
-          name: id,
-          apiKey,
-          baseURL,
-          defaultModel,
-          defaultHeaders,
-        })
-      );
-
-      console.info(
-        `[AI] Registered extra provider "${id}" → ${baseURL} (model=${defaultModel})`
-      );
-    }
-  }
-
+  /** List provider IDs that are configured and ready to accept requests. */
   getAvailableProviders(): ProviderName[] {
     return Array.from(this.providers.entries())
       .filter(([, p]) => p.isAvailable())
       .map(([name]) => name);
+  }
+
+  /**
+   * Build the ordered list of providers to try for a given request.
+   * Priority: explicit request > default > fallback chain > any other available.
+   */
+  private planAttempts(requested?: ProviderName): ProviderName[] {
+    const available = this.getAvailableProviders();
+    const availableSet = new Set(available);
+
+    const head =
+      requested && availableSet.has(requested)
+        ? requested
+        : availableSet.has(this.defaultProvider)
+          ? this.defaultProvider
+          : this.fallbackOrder.find((id) => availableSet.has(id)) ?? available[0];
+
+    if (!head) return [];
+
+    const chain = [head, ...this.fallbackOrder.filter((id) => id !== head && availableSet.has(id))];
+
+    // Ensure any remaining available providers still get a chance (in registration order).
+    for (const id of available) {
+      if (!chain.includes(id)) chain.push(id);
+    }
+    return chain;
   }
 
   async complete(
@@ -178,28 +132,21 @@ class AIService {
     providerName?: ProviderName
   ): Promise<AICompletionResponse> {
     const requestId = randomUUID().slice(0, 8);
-    const startingProvider = providerName ?? this.defaultProvider;
 
-    if (!this.providers.has(startingProvider)) {
-      throw new Error(`Unknown AI provider: ${startingProvider}`);
+    if (providerName && !this.providers.has(providerName)) {
+      throw new Error(`Unknown AI provider: ${providerName}`);
     }
 
-    // Build attempt order: requested provider first, then any other available ones as fallbacks.
-    const available = this.getAvailableProviders();
-    if (available.length === 0) {
+    const order = this.planAttempts(providerName);
+    if (order.length === 0) {
       throw new Error(
-        "No AI provider is configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY."
+        "No AI provider is configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or an EXTRA_PROVIDERS entry."
       );
     }
 
-    const order: ProviderName[] = [
-      ...(available.includes(startingProvider) ? [startingProvider] : []),
-      ...available.filter((p) => p !== startingProvider),
-    ];
-
-    if (!available.includes(startingProvider)) {
+    if (providerName && order[0] !== providerName) {
       console.warn(
-        `[AI ${requestId}] Requested provider "${startingProvider}" not configured — starting with "${order[0]}"`
+        `[AI ${requestId}] Requested provider "${providerName}" not available — starting with "${order[0]}"`
       );
     }
 
@@ -242,7 +189,6 @@ class AIService {
           console.error(
             `[AI ${requestId}] Provider "${name}" failed with NON-RETRYABLE error (status=${status ?? "?"}, code=${code ?? "?"}, ${durationMs}ms): ${message}`
           );
-          // Non-retryable → rethrow immediately, don't try other providers
           throw err;
         }
 
@@ -258,7 +204,6 @@ class AIService {
       }
     }
 
-    // All retryable attempts exhausted
     console.error(
       `[AI ${requestId}] All ${attempts.length} provider attempt(s) failed:`,
       attempts.map((a) => `${a.provider}(status=${a.status ?? "?"}, ${a.durationMs}ms)`).join(" → ")
@@ -267,4 +212,5 @@ class AIService {
   }
 }
 
-export const aiService = new AIService();
+// Default singleton built from environment. Tests can construct their own AIService.
+export const aiService = new AIService(buildProviderRegistry());
