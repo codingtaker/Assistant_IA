@@ -82,6 +82,11 @@ const fr = {
         "Aucun fournisseur IA disponible. Configurez au moins une clé API.",
       validation: "Veuillez remplir tous les champs requis.",
     },
+    // Footer
+    footer: {
+      tagline: "Créez des pitchs prêts pour les investisseurs avec l'IA",
+      madeWith: "Conçu avec",
+    },
     // Misc
     language: "English",
   },

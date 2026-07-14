@@ -81,6 +81,11 @@ const en = {
       noProvider: "No AI provider is available. Configure at least one API key.",
       validation: "Please fill in all required fields.",
     },
+    // Footer
+    footer: {
+      tagline: "Craft investor-ready pitches with AI",
+      madeWith: "Made with",
+    },
     // Misc
     language: "Français",
   },
