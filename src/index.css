@@ -3,75 +3,90 @@
 @tailwind utilities;
 
 /*
- * Color palette derived from the favicon:
- *   Primary  — #6366f1  indigo   → HSL 239 84% 67%
- *   Accent   — #a5f3fc  cyan     → HSL 186 95% 82%
+ * Palette strictly from the favicon — 4 colors only:
+ *   Indigo  #6366f1  →  HSL 239 84% 67%
+ *   Cyan    #a5f3fc  →  HSL 186 95% 82%
+ *   White   #ffffff  →  HSL   0  0% 100%
+ *   Black   #0d0d12  →  HSL 240 15%  8%
+ *
+ * Neutrals use 0% saturation (pure gray) — NO light-blue tones.
  */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 239 20% 12%;
+    /* ── Backgrounds ─────────────────────────── */
+    --background:         0   0% 100%;   /* white */
+    --foreground:       239  15%  10%;   /* near-black, slight indigo tint */
 
-    --card: 0 0% 100%;
-    --card-foreground: 239 20% 12%;
+    --card:               0   0% 100%;
+    --card-foreground:  239  15%  10%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 239 20% 12%;
+    --popover:            0   0% 100%;
+    --popover-foreground: 239 15% 10%;
 
-    /* Indigo #6366f1 */
-    --primary: 239 84% 67%;
-    --primary-foreground: 0 0% 100%;
+    /* ── Primary — Indigo #6366f1 ────────────── */
+    --primary:          239  84%  67%;
+    --primary-foreground: 0   0% 100%;
 
-    --secondary: 239 30% 96%;
-    --secondary-foreground: 239 84% 40%;
+    /* ── Secondary — pale indigo tint ───────── */
+    --secondary:        239  60%  96%;
+    --secondary-foreground: 239 84% 35%;
 
-    --muted: 239 20% 96%;
-    --muted-foreground: 239 15% 48%;
+    /* ── Muted — pure neutral gray, NO blue ─── */
+    --muted:              0   0%  95%;
+    --muted-foreground:   0   0%  45%;
 
-    /* Cyan accent #a5f3fc */
-    --accent: 186 95% 90%;
-    --accent-foreground: 186 80% 20%;
+    /* ── Accent — Cyan #a5f3fc ───────────────── */
+    --accent:           186  95%  90%;
+    --accent-foreground: 186 80%  18%;
 
-    --destructive: 0 84% 60%;
+    /* ── Danger ──────────────────────────────── */
+    --destructive:        0  84%  60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 239 20% 90%;
-    --input: 239 20% 90%;
-    --ring: 239 84% 67%;
+    /* ── Borders & inputs — pure gray ────────── */
+    --border:             0   0%  88%;
+    --input:              0   0%  88%;
+    --ring:             239  84%  67%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 239 30% 8%;
-    --foreground: 239 20% 95%;
+    /* ── Backgrounds ─────────────────────────── */
+    --background:       239  25%   7%;   /* near-black indigo */
+    --foreground:         0   0%  97%;   /* white */
 
-    --card: 239 28% 11%;
-    --card-foreground: 239 20% 95%;
+    --card:             239  22%  11%;
+    --card-foreground:    0   0%  97%;
 
-    --popover: 239 28% 11%;
-    --popover-foreground: 239 20% 95%;
+    --popover:          239  22%  11%;
+    --popover-foreground: 0   0%  97%;
 
-    /* Slightly lighter indigo for dark mode contrast */
-    --primary: 239 84% 72%;
-    --primary-foreground: 0 0% 100%;
+    /* ── Primary — slightly lighter indigo ───── */
+    --primary:          239  84%  72%;
+    --primary-foreground: 0   0% 100%;
 
-    --secondary: 239 25% 18%;
-    --secondary-foreground: 239 20% 90%;
+    /* ── Secondary ───────────────────────────── */
+    --secondary:        239  18%  18%;
+    --secondary-foreground: 0 0% 90%;
 
-    --muted: 239 25% 18%;
-    --muted-foreground: 239 15% 60%;
+    /* ── Muted — dark neutral gray ───────────── */
+    --muted:            239  12%  16%;
+    --muted-foreground:   0   0%  60%;
 
-    --accent: 186 80% 25%;
-    --accent-foreground: 186 95% 82%;
+    /* ── Accent — dark cyan ──────────────────── */
+    --accent:           186  60%  20%;
+    --accent-foreground: 186 95%  82%;
 
-    --destructive: 0 62% 40%;
+    /* ── Danger ──────────────────────────────── */
+    --destructive:        0  62%  38%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 239 25% 20%;
-    --input: 239 25% 20%;
-    --ring: 239 84% 72%;
+    /* ── Borders & inputs ────────────────────── */
+    --border:           239  15%  20%;
+    --input:            239  15%  20%;
+    --ring:             239  84%  72%;
   }
 }
 
@@ -83,21 +98,15 @@
   body {
     @apply bg-background text-foreground;
   }
-
-  /* Remove Bootstrap's default link underlines globally */
-  a {
-    text-decoration: none !important;
-  }
 }
 
-/* ── Bootstrap override layer ────────────────────────────────────────────────
-   Bootstrap is imported before this file, so these rules always win.        */
+/* Bootstrap override — must come after Bootstrap import in main.tsx */
 @layer utilities {
   a,
   a:hover,
   a:focus,
   a:active {
-    text-decoration: none !important;
     color: inherit;
+    text-decoration: none !important;
   }
 }
