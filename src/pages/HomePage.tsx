@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { PitchForm } from "@/features/pitch-generator/components/PitchForm";
@@ -56,10 +56,6 @@ export function HomePage() {
     <div className="mx-auto max-w-4xl space-y-10">
       {/* Hero */}
       <section className="text-center space-y-3 pt-4">
-        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
-          <Sparkles size={12} />
-          {t("nav.tagline")}
-        </div>
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl whitespace-pre-line">
           {t("hero.title")}
         </h1>

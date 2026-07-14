@@ -19,7 +19,7 @@ export function Navbar() {
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         {/* Brand */}
         <Link to="/" className="flex items-center gap-2 font-bold text-primary">
-          <Sparkles size={20} />
+          <img src="favicon.svg" alt="StartupPitch AI" className="h-6 w-6" />
           <span className="hidden sm:inline">StartupPitch AI</span>
         </Link>
 
