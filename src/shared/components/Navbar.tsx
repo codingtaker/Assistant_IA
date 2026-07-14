@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Sparkles, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LanguageToggle } from "./LanguageToggle";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Navbar() {
   const { t } = useTranslation();
@@ -41,7 +42,11 @@ export function Navbar() {
           ))}
         </nav>
 
-        <LanguageToggle />
+        {/* Controls */}
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <LanguageToggle />
+        </div>
       </div>
     </header>
   );
