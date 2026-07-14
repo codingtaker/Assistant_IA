@@ -2,20 +2,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Cpu, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { TemplateCard } from "./TemplateCard";
 import type { PitchFormValues, PitchTemplate } from "@/types";
+import type { ProviderInfo } from "@/services/api/pitch";
 
 const TEMPLATES: PitchTemplate[] = [
   "lean-canvas",
@@ -36,17 +32,20 @@ const schema = z.object({
     "investor-pitch",
     "executive-summary",
   ]),
-  provider: z.enum(["openai", "anthropic"]),
+  provider: z.string().min(1),
 });
 
 interface PitchFormProps {
   onSubmit: (values: PitchFormValues) => void;
   isLoading: boolean;
-  availableProviders: string[];
+  /** Full provider objects from /api/pitch/providers — may be empty while loading. */
+  availableProviders: ProviderInfo[];
 }
 
 export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchFormProps) {
   const { t } = useTranslation();
+
+  const defaultProvider = availableProviders[0]?.id ?? "openai";
 
   const {
     register,
@@ -58,11 +57,12 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
     resolver: zodResolver(schema),
     defaultValues: {
       template: "lean-canvas",
-      provider: (availableProviders[0] as "openai" | "anthropic") ?? "openai",
+      provider: defaultProvider,
     },
   });
 
   const selectedTemplate = watch("template");
+  const selectedProvider = watch("provider");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -151,25 +151,25 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
           />
         </div>
 
-        {/* Provider selector */}
-        {availableProviders.length > 1 && (
-          <div className="space-y-1.5">
-            <Label htmlFor="provider">{t("form.provider")}</Label>
-            <Select
-              onValueChange={(v) => setValue("provider", v as "openai" | "anthropic")}
-              defaultValue={availableProviders[0]}
-            >
-              <SelectTrigger id="provider" className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableProviders.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p === "openai" ? "OpenAI (GPT-4o)" : "Anthropic (Claude)"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Provider selector — dynamic, shows all providers returned by backend */}
+        {availableProviders.length > 0 && (
+          <div className="space-y-2">
+            <Label>{t("form.provider")}</Label>
+            <div className="flex flex-wrap gap-2">
+              {availableProviders.map((p) => (
+                <ProviderButton
+                  key={p.id}
+                  provider={p}
+                  selected={selectedProvider === p.id}
+                  onSelect={() => setValue("provider", p.id)}
+                />
+              ))}
+            </div>
+            {availableProviders.length > 1 && (
+              <p className="text-xs text-muted-foreground">
+                {t("form.providerFallbackNote")}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -180,13 +180,4 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("form.generating")}
           </>
-        ) : (
-          <>
-            <Sparkles className="mr-2 h-4 w-4" />
-            {t("form.generate")}
-          </>
-        )}
-      </Button>
-    </form>
-  );
-}
+  

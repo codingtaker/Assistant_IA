@@ -7,27 +7,38 @@ import { PitchForm } from "@/features/pitch-generator/components/PitchForm";
 import { PitchResult } from "@/features/pitch-generator/components/PitchResult";
 import { usePitchGenerator } from "@/features/pitch-generator/hooks/usePitchGenerator";
 import { useHistory } from "@/features/history/hooks/useHistory";
-import { pitchApi } from "@/services/api/pitch";
+import { pitchApi, type ProviderInfo } from "@/services/api/pitch";
 import type { PitchFormValues, GeneratedPitch } from "@/types";
+
+/** Fallback providers shown while the backend /providers call is in-flight or fails. */
+const FALLBACK_PROVIDERS: ProviderInfo[] = [
+  { id: "openai",    label: "OpenAI",    description: "GPT-4o", isLocal: false },
+  { id: "anthropic", label: "Anthropic", description: "Claude 3.5 Sonnet", isLocal: false },
+];
 
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const { pitch, isLoading, error, generate, reset } = usePitchGenerator();
   const { savePitch } = useHistory();
-  const [availableProviders, setAvailableProviders] = useState<string[]>(["openai"]);
+  const [availableProviders, setAvailableProviders] = useState<ProviderInfo[]>([]);
   const [lastValues, setLastValues] = useState<PitchFormValues | null>(null);
+  const [requestedProvider, setRequestedProvider] = useState<string | undefined>();
 
   useEffect(() => {
-    pitchApi.getProviders().then(({ providers }) => {
-      if (providers.length > 0) setAvailableProviders(providers);
-    }).catch(() => {
-      // Backend not running: default to showing both providers in UI
-      setAvailableProviders(["openai", "anthropic"]);
-    });
+    pitchApi
+      .getProviders()
+      .then(({ providers }) => {
+        setAvailableProviders(providers.length > 0 ? providers : FALLBACK_PROVIDERS);
+      })
+      .catch(() => {
+        // Backend unreachable — show fallback so the form is still usable
+        setAvailableProviders(FALLBACK_PROVIDERS);
+      });
   }, []);
 
   const handleSubmit = async (values: PitchFormValues) => {
     setLastValues(values);
+    setRequestedProvider(values.provider);
     await generate(values, i18n.language.startsWith("fr") ? "fr" : "en");
   };
 
@@ -73,29 +84,4 @@ export function HomePage() {
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Result */}
-      {pitch && (
-        <PitchResult
-          pitch={pitch}
-          onSave={handleSave}
-          onRegenerate={handleRegenerate}
-        />
-      )}
-
-      {pitch && (
-        <div className="pb-4 text-center">
-          <button
-            onClick={reset}
-            className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-          >
-            ← New pitch
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+          <AlertDescription>{error}</AlertDescrip

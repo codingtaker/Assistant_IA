@@ -48,6 +48,7 @@ const fr = {
       features: "Fonctionnalités clés (optionnel)",
       featuresPlaceholder: "Listez 3–5 fonctionnalités principales...",
       provider: "Fournisseur IA",
+      providerFallbackNote: "Si le fournisseur choisi n'a plus de crédits, le système bascule automatiquement vers le suivant disponible.",
       generate: "Générer le pitch",
       generating: "Génération en cours…",
     },
@@ -62,6 +63,8 @@ const fr = {
       save: "Sauvegarder",
       saved: "Sauvegardé !",
       regenerate: "Régénérer",
+      fallbackBadge: "Basculé → {{provider}}",
+      fallbackTooltip: "{{requested}} n'avait plus de crédits — basculé automatiquement vers {{used}}",
     },
     // History
     history: {
@@ -71,15 +74,4 @@ const fr = {
       open: "Ouvrir",
     },
     // Errors
-    errors: {
-      generic: "Une erreur est survenue. Veuillez réessayer.",
-      noProvider:
-        "Aucun fournisseur IA disponible. Configurez au moins une clé API.",
-      validation: "Veuillez remplir tous les champs requis.",
-    },
-    // Misc
-    language: "English",
-  },
-};
-
-export default fr;
+    erro

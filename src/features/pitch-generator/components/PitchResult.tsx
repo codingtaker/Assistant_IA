@@ -20,12 +20,17 @@ interface PitchResultProps {
   pitch: GeneratedPitch;
   onSave: (pitch: GeneratedPitch) => void;
   onRegenerate: () => void;
+  /** Provider originally requested by the user. When different from pitch.provider, a fallback badge is shown. */
+  requestedProvider?: string;
 }
 
-export function PitchResult({ pitch, onSave, onRegenerate }: PitchResultProps) {
+export function PitchResult({ pitch, onSave, onRegenerate, requestedProvider }: PitchResultProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  /** True when the backend used a different provider than what the user requested (fallback triggered). */
+  const usedFallback = requestedProvider != null && requestedProvider !== pitch.provider;
 
   const fullText = pitch.sections
     .map((s) => `## ${s.title}\n\n${s.content}`)
@@ -117,6 +122,15 @@ export function PitchResult({ pitch, onSave, onRegenerate }: PitchResultProps) {
           <Badge variant="outline" className="text-xs text-muted-foreground">
             {t("result.generatedBy", { model: pitch.model })}
           </Badge>
+          {usedFallback && (
+            <Badge
+              variant="outline"
+              className="border-amber-400 bg-amber-50 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+              title={t("result.fallbackTooltip", { requested: requestedProvider, used: pitch.provider })}
+            >
+              {t("result.fallbackBadge", { provider: pitch.provider })}
+            </Badge>
+          )}
         </div>
 
         {/* Action bar */}
@@ -148,30 +162,4 @@ export function PitchResult({ pitch, onSave, onRegenerate }: PitchResultProps) {
           >
             <Bookmark className="mr-1.5 h-3.5 w-3.5" />
             {saved ? t("result.saved") : t("result.save")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onRegenerate}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            {t("result.regenerate")}
-          </Button>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Sections */}
-      <div className="space-y-6">
-        {pitch.sections.map((section, i) => (
-          <div key={i} className="space-y-2">
-            <h3 className="font-semibold text-primary">{section.title}</h3>
-            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-              {section.content}
-            </p>
-            {i < pitch.sections.length - 1 && (
-              <Separator className="mt-4 opacity-40" />
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+        

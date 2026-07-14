@@ -1,5 +1,10 @@
-/** Supported AI provider identifiers. Add new providers here when extending the backend. */
-export type AIProvider = "openai" | "anthropic";
+/**
+ * AI provider identifier — any string ID registered on the backend
+ * (e.g. "openai", "anthropic", "groq", "mistral", "ollama", …).
+ * Keep as `string` so new providers added via EXTRA_PROVIDERS work without
+ * a frontend code change.
+ */
+export type AIProvider = string;
 
 /** UI language codes supported by the i18n system. */
 export type Language = "en" | "fr";
@@ -52,8 +57,4 @@ export interface PitchFormValues {
   targetMarket: string;
   uniqueValue: string;
   /** Optional comma-separated list of key features. */
-  features?: string;
-  template: PitchTemplate;
-  /** AI provider chosen by the user; defaults to the first available provider. */
-  provider: AIProvider;
-}
+  features?: strin

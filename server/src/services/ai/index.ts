@@ -34,24 +34,86 @@ export class AIAllProvidersFailedError extends Error {
 }
 
 /**
+ * Error codes that indicate a billing / credit problem on the current provider.
+ * These are provider-specific strings embedded inside the SDK error object.
+ *
+ * OpenAI  — err.code === "insufficient_quota"
+ * Anthropic — err.type === "payment_required" | status 402
+ * Generic compatible providers may use similar codes.
+ */
+const BILLING_ERROR_CODES = new Set([
+  "insufficient_quota",       // OpenAI
+  "billing_hard_limit_reached", // OpenAI (older name)
+  "payment_required",         // Anthropic / generic
+  "credit_balance_insufficient", // Anthropic
+  "out_of_credits",           // Groq, DeepSeek, etc.
+  "quota_exceeded",           // Mistral / generic
+  "insufficient_credits",     // generic
+]);
+
+/**
+ * True when the error is specifically about the current provider having no
+ * remaining credit/quota — meaning the *same request* will likely succeed on a
+ * different provider, so fallback is strongly recommended.
+ */
+function isBillingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const anyErr = err as { status?: number; code?: string; type?: string; message?: string };
+
+  // HTTP 402 Payment Required (Anthropic credit exhausted)
+  if (anyErr.status === 402) return true;
+
+  // Provider-specific error codes attached to the SDK error
+  if (typeof anyErr.code === "string" && BILLING_ERROR_CODES.has(anyErr.code)) return true;
+  if (typeof anyErr.type === "string" && BILLING_ERROR_CODES.has(anyErr.type)) return true;
+
+  // Fallback: scan the message for well-known phrases
+  if (typeof anyErr.message === "string" &&
+    /insufficient.*(quota|credit|fund|balance)|out of credit|billing limit|payment required/i
+      .test(anyErr.message)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Decide whether an error is transient and worth retrying on another provider.
+ *
  * Retry on:
- *   - HTTP 408 (timeout), 429 (rate limit / quota), 5xx (server errors)
- *   - Network errors (ECONNREFUSED, ECONNRESET, ETIMEDOUT, ENOTFOUND, EAI_AGAIN, socket hang up)
+ *   - HTTP 402 (credit exhausted — Anthropic)
+ *   - HTTP 408 (request timeout)
+ *   - HTTP 429 (rate limit OR quota exceeded — both warrant trying another provider)
+ *   - HTTP 5xx (server-side errors)
+ *   - Network errors (ECONNREFUSED, ECONNRESET, ETIMEDOUT, ENOTFOUND, EAI_AGAIN, EPIPE)
+ *   - Billing / credit error codes from any provider (see BILLING_ERROR_CODES)
+ *
  * Do NOT retry on:
- *   - 4xx client errors (400, 401, 403, 404) — same input will fail on the other provider
+ *   - HTTP 400 (bad request — same payload will fail everywhere)
+ *   - HTTP 401 (invalid API key — retrying with same key is pointless)
+ *   - HTTP 403 (forbidden — permissions issue)
+ *   - HTTP 404 (model not found)
+ *   - Other 4xx not listed above
  */
 function isRetryableError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
 
+  // Billing errors are always worth retrying on another provider
+  if (isBillingError(err)) return true;
+
   const anyErr = err as { status?: number; code?: string; message?: string };
 
   if (typeof anyErr.status === "number") {
+    // 402 already handled by isBillingError above, but keep explicit for clarity
+    if (anyErr.status === 402) return true;
     if (anyErr.status === 408 || anyErr.status === 429) return true;
     if (anyErr.status >= 500 && anyErr.status < 600) return true;
+    // All other 4xx: non-retryable (same input, same result)
     return false;
   }
 
+  // Network-level errors (no HTTP status)
   const networkCodes = new Set([
     "ECONNREFUSED",
     "ECONNRESET",
@@ -62,7 +124,10 @@ function isRetryableError(err: unknown): boolean {
   ]);
   if (typeof anyErr.code === "string" && networkCodes.has(anyErr.code)) return true;
 
-  if (typeof anyErr.message === "string" && /socket hang up|network|fetch failed/i.test(anyErr.message)) {
+  if (
+    typeof anyErr.message === "string" &&
+    /socket hang up|network|fetch failed/i.test(anyErr.message)
+  ) {
     return true;
   }
 
@@ -70,10 +135,15 @@ function isRetryableError(err: unknown): boolean {
 }
 
 function describeError(err: unknown): { status?: number; code?: string; message: string } {
-  const anyErr = err as { status?: number; code?: string; message?: string } | undefined;
+  const anyErr = err as { status?: number; code?: string; type?: string; message?: string } | undefined;
   return {
     status: typeof anyErr?.status === "number" ? anyErr.status : undefined,
-    code: typeof anyErr?.code === "string" ? anyErr.code : undefined,
+    // Prefer .code; fall back to .type (Anthropic uses .type in some errors)
+    code: typeof anyErr?.code === "string"
+      ? anyErr.code
+      : typeof anyErr?.type === "string"
+        ? anyErr.type
+        : undefined,
     message: err instanceof Error ? err.message : String(err),
   };
 }
@@ -181,36 +251,4 @@ export class AIService {
         const { status, code, message } = describeError(err);
         const retryable = isRetryableError(err);
 
-        attempts.push({ provider: name, durationMs, status, code, message, retryable });
-
-        const hasMoreProviders = i < order.length - 1;
-
-        if (!retryable) {
-          console.error(
-            `[AI ${requestId}] Provider "${name}" failed with NON-RETRYABLE error (status=${status ?? "?"}, code=${code ?? "?"}, ${durationMs}ms): ${message}`
-          );
-          throw err;
-        }
-
-        if (hasMoreProviders) {
-          console.warn(
-            `[AI ${requestId}] Provider "${name}" failed (status=${status ?? "?"}, code=${code ?? "?"}, ${durationMs}ms): ${message} — will try "${order[i + 1]}"`
-          );
-        } else {
-          console.error(
-            `[AI ${requestId}] Provider "${name}" failed (status=${status ?? "?"}, code=${code ?? "?"}, ${durationMs}ms): ${message} — no more providers to try`
-          );
-        }
-      }
-    }
-
-    console.error(
-      `[AI ${requestId}] All ${attempts.length} provider attempt(s) failed:`,
-      attempts.map((a) => `${a.provider}(status=${a.status ?? "?"}, ${a.durationMs}ms)`).join(" → ")
-    );
-    throw new AIAllProvidersFailedError(attempts);
-  }
-}
-
-// Default singleton built from environment. Tests can construct their own AIService.
-export const aiService = new AIService(buildProviderRegistry());
+        attempts.push({ provider: name, durationMs, status, code, message, re
