@@ -162,4 +162,30 @@ export function PitchResult({ pitch, onSave, onRegenerate, requestedProvider }: 
           >
             <Bookmark className="mr-1.5 h-3.5 w-3.5" />
             {saved ? t("result.saved") : t("result.save")}
-        
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onRegenerate}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            {t("result.regenerate")}
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Sections */}
+      <div className="space-y-6">
+        {pitch.sections.map((section, i) => (
+          <div key={i} className="space-y-2">
+            <h3 className="font-semibold text-primary">{section.title}</h3>
+            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+              {section.content}
+            </p>
+            {i < pitch.sections.length - 1 && (
+              <Separator className="mt-4 opacity-40" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

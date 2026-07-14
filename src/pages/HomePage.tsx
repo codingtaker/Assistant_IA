@@ -31,7 +31,6 @@ export function HomePage() {
         setAvailableProviders(providers.length > 0 ? providers : FALLBACK_PROVIDERS);
       })
       .catch(() => {
-        // Backend unreachable — show fallback so the form is still usable
         setAvailableProviders(FALLBACK_PROVIDERS);
       });
   }, []);
@@ -84,4 +83,30 @@ export function HomePage() {
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescrip
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Result */}
+      {pitch && (
+        <PitchResult
+          pitch={pitch}
+          onSave={handleSave}
+          onRegenerate={handleRegenerate}
+          requestedProvider={requestedProvider}
+        />
+      )}
+
+      {pitch && (
+        <div className="pb-4 text-center">
+          <button
+            onClick={reset}
+            className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+          >
+            ← New pitch
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

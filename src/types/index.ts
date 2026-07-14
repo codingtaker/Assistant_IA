@@ -1,9 +1,4 @@
-/**
- * AI provider identifier — any string ID registered on the backend
- * (e.g. "openai", "anthropic", "groq", "mistral", "ollama", …).
- * Keep as `string` so new providers added via EXTRA_PROVIDERS work without
- * a frontend code change.
- */
+/** Supported AI provider identifiers. Widened to string to support any backend-registered provider. */
 export type AIProvider = string;
 
 /** UI language codes supported by the i18n system. */
@@ -36,8 +31,8 @@ export interface GeneratedPitch {
   id: string;
   /** Template that was used to structure this pitch. */
   template: PitchTemplate;
-  /** Provider that generated the pitch. */
-  provider: AIProvider;
+  /** Provider that generated the pitch (e.g. "openai", "groq", "anthropic"). */
+  provider: string;
   /** Model identifier returned by the provider (e.g. "gpt-4o"). */
   model: string;
   /** User-provided project name, echoed from the request. */
@@ -57,4 +52,8 @@ export interface PitchFormValues {
   targetMarket: string;
   uniqueValue: string;
   /** Optional comma-separated list of key features. */
-  features?: strin
+  features?: string;
+  template: PitchTemplate;
+  /** AI provider chosen by the user; defaults to the first available provider. */
+  provider: AIProvider;
+}

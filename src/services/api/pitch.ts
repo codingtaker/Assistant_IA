@@ -32,4 +32,18 @@ export const pitchApi = {
   /**
    * Send a pitch generation request to the backend.
    * @param values   Form values collected from PitchForm.
-   * @param language 
+   * @param language Active UI language ("en" | "fr") forwarded to the prompt builder.
+   */
+  generate: (values: PitchFormValues, language: string) =>
+    apiClient.post<GeneratePitchResponse>("/pitch/generate", {
+      ...values,
+      language,
+    }),
+
+  /**
+   * Fetch the list of AI providers currently configured on the backend.
+   * Used on page load to populate the provider selector in the form.
+   */
+  getProviders: () =>
+    apiClient.get<ProvidersResponse>("/pitch/providers"),
+};

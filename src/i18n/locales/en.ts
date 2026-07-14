@@ -48,7 +48,8 @@ const en = {
       features: "Key features (optional)",
       featuresPlaceholder: "List 3–5 core features...",
       provider: "AI provider",
-      providerFallbackNote: "If your chosen provider has no credit, the system automatically switches to the next available one.",
+      providerFallbackNote:
+        "If your chosen provider has no credit, the system automatically switches to the next available one.",
       generate: "Generate pitch",
       generating: "Generating…",
     },
@@ -64,7 +65,8 @@ const en = {
       saved: "Saved!",
       regenerate: "Regenerate",
       fallbackBadge: "Auto-switched → {{provider}}",
-      fallbackTooltip: "{{requested}} had no credit — automatically switched to {{used}}",
+      fallbackTooltip:
+        "{{requested}} had no credit — automatically switched to {{used}}",
     },
     // History
     history: {
@@ -74,4 +76,14 @@ const en = {
       open: "Open",
     },
     // Errors
-    er
+    errors: {
+      generic: "Something went wrong. Please try again.",
+      noProvider: "No AI provider is available. Configure at least one API key.",
+      validation: "Please fill in all required fields.",
+    },
+    // Misc
+    language: "Français",
+  },
+};
+
+export default en;
