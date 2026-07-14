@@ -240,4 +240,62 @@ export class AIService {
       const started = Date.now();
 
       console.info(
-        `[AI ${requestId}] ${isFallback ? "Fallback attempt" : "Attempt"} ${i + 1}/
+        `[AI ${requestId}] ${isFallback ? "Fallback attempt" : "Attempt"} ${i + 1}/${order.length} → provider="${name}"`
+      );
+
+      try {
+        const result = await provider.complete(request);
+        const durationMs = Date.now() - started;
+
+        if (isFallback) {
+          console.warn(
+            `[AI ${requestId}] Recovered via fallback "${name}" after ${attempts.length} failure(s) (${durationMs}ms)`
+          );
+        } else {
+          console.info(
+            `[AI ${requestId}] Success via "${name}" model="${result.model}" (${durationMs}ms, tokens=${result.tokensUsed?.total ?? "n/a"})`
+          );
+        }
+        return result;
+      } catch (err) {
+        const durationMs = Date.now() - started;
+        const { status, code, message } = describeError(err);
+        const retryable = isRetryableError(err);
+
+        attempts.push({ provider: name, durationMs, status, code, message, retryable });
+
+        const hasMoreProviders = i < order.length - 1;
+
+        if (!retryable) {
+          console.error(
+            `[AI ${requestId}] Provider "${name}" failed with NON-RETRYABLE error (status=${status ?? "?"}, code=${code ?? "?"}, ${durationMs}ms): ${message}`
+          );
+          throw err;
+        }
+
+        const reason = isBillingError(err)
+          ? "BILLING/CREDIT ERROR — switching provider"
+          : `status=${status ?? "?"}, code=${code ?? "?"}`;
+
+        if (hasMoreProviders) {
+          console.warn(
+            `[AI ${requestId}] Provider "${name}" failed [${reason}] (${durationMs}ms): ${message} — switching to "${order[i + 1]}"`
+          );
+        } else {
+          console.error(
+            `[AI ${requestId}] Provider "${name}" failed [${reason}] (${durationMs}ms): ${message} — no more providers to try`
+          );
+        }
+      }
+    }
+
+    console.error(
+      `[AI ${requestId}] All ${attempts.length} provider attempt(s) failed:`,
+      attempts.map((a) => `${a.provider}(status=${a.status ?? "?"}, ${a.durationMs}ms)`).join(" → ")
+    );
+    throw new AIAllProvidersFailedError(attempts);
+  }
+}
+
+// Default singleton built from environment. Tests can construct their own AIService.
+export const aiService = new AIService(buildProviderRegistry());
