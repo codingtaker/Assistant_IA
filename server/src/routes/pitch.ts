@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { aiService } from "../services/ai";
 import { buildPrompts } from "../services/pitch/prompts";
 import { pitchRateLimiter } from "../middleware/rateLimiter";
+import { apiKeyAuth, consumeQuota } from "../middleware/auth";
 import { PROVIDER_PRESETS } from "../services/ai/providers/registry";
 import type { PitchRequestBody, GeneratedPitch } from "../types";
 
@@ -65,18 +66,23 @@ router.get("/providers", (_req: Request, res: Response) => {
   res.json({ providers });
 });
 
-// POST /api/pitch/generate — generate a pitch
+// POST /api/pitch/generate — generate a pitch (authenticated + quota-limited)
 router.post(
   "/generate",
   pitchRateLimiter,
+  apiKeyAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      console.info("[POST /generate] body received:", JSON.stringify(req.body, null, 2));
+      // Do NOT log req.body — it contains the user's (potentially confidential)
+      // business ideas. Log only non-sensitive metadata.
+      console.info(
+        `[POST /generate] client="${req.client?.name}" template="${req.body?.template}" provider="${req.body?.provider ?? "default"}"`
+      );
 
       const parseResult = PitchRequestSchema.safeParse(req.body);
       if (!parseResult.success) {
         const flat = parseResult.error.flatten();
-        console.warn("[POST /generate] Validation FAILED:", JSON.stringify(flat, null, 2));
+        console.warn("[POST /generate] Validation FAILED");
         res.status(400).json({
           error: {
             message: "Invalid request body",
@@ -85,8 +91,6 @@ router.post(
         });
         return;
       }
-
-      console.info("[POST /generate] Validation OK — provider:", parseResult.data.provider);
 
       const body = parseResult.data as PitchRequestBody;
       const { systemPrompt, userPrompt } = buildPrompts(body);
@@ -117,6 +121,12 @@ router.post(
         rawContent: aiResponse.content,
         generatedAt: new Date().toISOString(),
       };
+
+      // Charge one unit of quota only now that generation succeeded.
+      const remaining = req.client ? await consumeQuota(req.client.id) : null;
+      if (remaining !== null) {
+        res.setHeader("X-Quota-Remaining", String(remaining));
+      }
 
       res.status(201).json({ pitch });
     } catch (err) {

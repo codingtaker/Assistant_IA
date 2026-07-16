@@ -8,7 +8,9 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:migrate": "ts-node src/db/migrate.ts",
+    "client:create": "ts-node src/scripts/createClient.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",
@@ -18,12 +20,15 @@
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
     "openai": "^4.104.0",
+    "pg": "^8.22.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.5.5",
+    "@types/pg": "^8.20.0",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.3"
   }

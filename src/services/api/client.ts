@@ -6,6 +6,16 @@
  */
 const BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
+/**
+ * Client API key sent with every request as `x-api-key`.
+ *
+ * ⚠️ A Vite env var is embedded into the built bundle and is therefore visible
+ * to anyone who inspects the site. This key is a soft gate against anonymous
+ * public abuse and a way to attach a per-client quota — NOT a hard secret.
+ * True per-user protection arrives with the login step (JWT).
+ */
+const API_KEY = import.meta.env.VITE_API_KEY as string | undefined;
+
 interface FetchOptions extends RequestInit {
   body?: BodyInit | null;
 }
@@ -13,6 +23,7 @@ interface FetchOptions extends RequestInit {
 /**
  * Core fetch wrapper used by all API calls.
  * - Always sends `Content-Type: application/json`.
+ * - Attaches `x-api-key` when VITE_API_KEY is configured.
  * - On a non-2xx response, extracts `error.message` from the JSON body
  *   (matching the backend error shape) and throws an Error with that message.
  *
@@ -25,6 +36,7 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(API_KEY ? { "x-api-key": API_KEY } : {}),
       ...options.headers,
     },
   });
