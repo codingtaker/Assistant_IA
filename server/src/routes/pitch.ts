@@ -40,9 +40,26 @@ const PROVIDER_DISPLAY: Record<string, { label: string; description: string }> =
   rodium:     { label: "RodiumAI",   description: "Claude via RodiumAI proxy" },
 };
 
-// GET /api/pitch/providers — list ALL known providers with display metadata and a `configured` flag
+/**
+ * Allow-list of providers a client may explicitly request via `provider`.
+ *
+ * Set `CLIENT_SELECTABLE_PROVIDERS=openai,groq` to limit what callers can pick
+ * (e.g. only cheaper models), independent of what's configured server-side.
+ * When unset, any configured provider remains selectable (backward compatible).
+ * The server-side fallback chain is unaffected — this only governs the caller's
+ * explicit choice.
+ */
+function clientSelectableProviders(): Set<string> | null {
+  const raw = process.env.CLIENT_SELECTABLE_PROVIDERS?.trim();
+  if (!raw) return null;
+  const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return ids.length ? new Set(ids) : null;
+}
+
+// GET /api/pitch/providers — list ALL known providers with display metadata and flags
 router.get("/providers", (_req: Request, res: Response) => {
   const availableSet = new Set(aiService.getAvailableProviders());
+  const allow = clientSelectableProviders();
 
   // Union of preset IDs and any provider registered from EXTRA_PROVIDERS (unknown to presets).
   const allIds = Array.from(
@@ -52,6 +69,7 @@ router.get("/providers", (_req: Request, res: Response) => {
   const providers = allIds.map((id) => {
     const display = PROVIDER_DISPLAY[id];
     const preset = PROVIDER_PRESETS[id];
+    const configured = availableSet.has(id);
     return {
       id,
       label: display?.label ?? id,
@@ -59,7 +77,9 @@ router.get("/providers", (_req: Request, res: Response) => {
       isLocal:
         id === "ollama" ||
         ((preset as { baseURL?: string } | undefined)?.baseURL?.includes("localhost") ?? false),
-      configured: availableSet.has(id),
+      configured,
+      // Whether a client may request this provider explicitly.
+      selectable: configured && (allow ? allow.has(id) : true),
     };
   });
 
@@ -93,6 +113,19 @@ router.post(
       }
 
       const body = parseResult.data as PitchRequestBody;
+
+      // Enforce the client-selectable provider allow-list (if configured).
+      const allow = clientSelectableProviders();
+      if (body.provider && allow && !allow.has(body.provider)) {
+        res.status(400).json({
+          error: {
+            message: `Provider "${body.provider}" is not selectable.`,
+            code: "PROVIDER_NOT_ALLOWED",
+          },
+        });
+        return;
+      }
+
       const { systemPrompt, userPrompt } = buildPrompts(body);
 
       const aiResponse = await aiService.complete(
