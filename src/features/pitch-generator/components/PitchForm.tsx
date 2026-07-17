@@ -2,12 +2,18 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
-import { Loader2, Sparkles, Cpu, WifiOff } from "lucide-react";
+import { Loader2, Sparkles, Cpu, WifiOff, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { TemplateCard } from "./TemplateCard";
 import type { PitchFormValues, PitchTemplate } from "@/types";
@@ -38,14 +44,12 @@ const schema = z.object({
 interface PitchFormProps {
   onSubmit: (values: PitchFormValues) => void;
   isLoading: boolean;
-  /** Full provider objects from /api/pitch/providers — may be empty while loading. */
   availableProviders: ProviderInfo[];
 }
 
 export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchFormProps) {
   const { t } = useTranslation();
 
-  // Default to the first *configured* provider
   const defaultProvider =
     availableProviders.find((p) => p.configured)?.id ?? availableProviders[0]?.id ?? "openai";
 
@@ -66,7 +70,9 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
   const selectedTemplate = watch("template");
   const selectedProvider = watch("provider");
 
-  const configuredCount = availableProviders.filter((p) => p.configured).length;
+  const configuredProviders = availableProviders.filter((p) => p.configured);
+  const configuredCount = configuredProviders.length;
+  const selectedProviderInfo = availableProviders.find((p) => p.id === selectedProvider);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -155,35 +161,88 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
           />
         </div>
 
-        {/* Provider selector — shows all known providers; unconfigured ones are disabled */}
-        {availableProviders.length > 0 && (
-          <div className="space-y-2">
-            <Label>{t("form.provider")}</Label>
-            <div className="flex flex-wrap gap-2">
-              {availableProviders.map((p) => (
-                <ProviderButton
-                  key={p.id}
-                  provider={p}
-                  selected={selectedProvider === p.id}
-                  onSelect={() => p.configured && setValue("provider", p.id)}
-                />
-              ))}
+        {/* Provider dropdown */}
+        <div className="space-y-2">
+          <Label>{t("form.provider")}</Label>
+
+          {configuredCount === 0 ? (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{t("errors.noProvider")}</span>
             </div>
-            {configuredCount > 1 && (
-              <p className="text-xs text-muted-foreground">
-                {t("form.providerFallbackNote")}
-              </p>
-            )}
-            {configuredCount === 0 && (
-              <p className="text-xs text-destructive">
-                {t("errors.noProvider")}
-              </p>
-            )}
-          </div>
-        )}
+          ) : (
+            <Select
+              value={selectedProvider}
+              onValueChange={(v) => setValue("provider", v)}
+            >
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue>
+                  {selectedProviderInfo ? (
+                    <span className="flex items-center gap-2">
+                      {selectedProviderInfo.isLocal ? (
+                        <WifiOff size={13} className="shrink-0 opacity-60" />
+                      ) : (
+                        <Cpu size={13} className="shrink-0 opacity-60" />
+                      )}
+                      {selectedProviderInfo.label}
+                    </span>
+                  ) : (
+                    t("form.provider")
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+
+              <SelectContent>
+                {/* Configured providers first */}
+                {configuredProviders.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 size={13} className="shrink-0 text-primary" />
+                      <span>{p.label}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">{p.description}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+
+                {/* Unconfigured providers — shown but grayed out and not selectable */}
+                {availableProviders
+                  .filter((p) => !p.configured)
+                  .map((p) => (
+                    <SelectItem
+                      key={p.id}
+                      value={p.id}
+                      disabled
+                      className={cn("opacity-40")}
+                    >
+                      <span className="flex items-center gap-2">
+                        {p.isLocal ? (
+                          <WifiOff size={13} className="shrink-0" />
+                        ) : (
+                          <Cpu size={13} className="shrink-0" />
+                        )}
+                        <span>{p.label}</span>
+                        <span className="ml-1 text-xs text-muted-foreground">no key</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {configuredCount > 1 && (
+            <p className="text-xs text-muted-foreground">
+              {t("form.providerFallbackNote")}
+            </p>
+          )}
+        </div>
       </section>
 
-      <Button type="submit" disabled={isLoading || configuredCount === 0} size="lg" className="w-full sm:w-auto">
+      <Button
+        type="submit"
+        disabled={isLoading || configuredCount === 0}
+        size="lg"
+        className="w-full sm:w-auto"
+      >
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -197,59 +256,5 @@ export function PitchForm({ onSubmit, isLoading, availableProviders }: PitchForm
         )}
       </Button>
     </form>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* ProviderButton — card-style selector for a single provider                  */
-/* -------------------------------------------------------------------------- */
-
-interface ProviderButtonProps {
-  provider: ProviderInfo;
-  selected: boolean;
-  onSelect: () => void;
-}
-
-function ProviderButton({ provider, selected, onSelect }: ProviderButtonProps) {
-  const isDisabled = !provider.configured;
-
-  return (
-    <button
-      type="button"
-      onClick={isDisabled ? undefined : onSelect}
-      disabled={isDisabled}
-      title={
-        isDisabled
-          ? `Add ${provider.id.toUpperCase()}_API_KEY to .env to enable`
-          : provider.description
-      }
-      className={cn(
-        "group flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        isDisabled
-          ? "cursor-not-allowed border-border bg-muted opacity-40"
-          : selected
-            ? "border-primary bg-primary/5 font-medium text-primary shadow-sm"
-            : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
-      )}
-      aria-pressed={!isDisabled && selected}
-      aria-disabled={isDisabled}
-    >
-      {provider.isLocal ? (
-        <WifiOff size={13} className="shrink-0 opacity-60" />
-      ) : (
-        <Cpu size={13} className="shrink-0 opacity-60" />
-      )}
-      <span>{provider.label}</span>
-      {provider.isLocal && (
-        <Badge variant="outline" className="ml-0.5 px-1 py-0 text-[10px]">
-          local
-        </Badge>
-      )}
-      {isDisabled && (
-        <Badge variant="outline" className="ml-0.5 px-1 py-0 text-[10px] opacity-60">
-          no key
-        </Badge>
-      )}
-    </button>
   );
 }
