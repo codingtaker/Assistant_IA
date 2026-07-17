@@ -4,9 +4,6 @@ import { pool } from "../db/pool";
 
 /**
  * SHA-256 hex digest of a plaintext key.
- * Keys are high-entropy random tokens, so a plain SHA-256 (no per-key salt) is
- * sufficient here — we only need a fast, deterministic lookup value and to avoid
- * storing the secret. (Use bcrypt/argon2 only for low-entropy human passwords.)
  */
 export function hashKey(plaintext: string): string {
   return createHash("sha256").update(plaintext, "utf8").digest("hex");
@@ -26,11 +23,21 @@ function extractKey(req: Request): string | null {
 }
 
 /**
+ * Whether API key auth is required.
+ * Set REQUIRE_API_KEY=false (or leave DATABASE_URL unset) to bypass in local dev.
+ */
+function isAuthRequired(): boolean {
+  const envFlag = process.env.REQUIRE_API_KEY;
+  if (envFlag !== undefined) return envFlag !== "false" && envFlag !== "0";
+  // Auto-disable when no DATABASE_URL is configured (open-source / local dev)
+  return Boolean(process.env.DATABASE_URL);
+}
+
+/**
  * Authenticate a request by API key and enforce the client's rolling quota.
  *
- * On success: attaches `req.client` and calls `next()`. The quota window is
- * reset atomically if it has elapsed, but the usage counter is only incremented
- * on a *successful* generation (see `consumeQuota`), so failed calls are free.
+ * When REQUIRE_API_KEY=false or DATABASE_URL is not set, this middleware is a
+ * no-op — useful for local development and open-source contributors.
  *
  * Responses:
  *   401 — missing/unknown/inactive key
@@ -42,6 +49,12 @@ export async function apiKeyAuth(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Bypass auth in local dev when not explicitly required
+  if (!isAuthRequired()) {
+    next();
+    return;
+  }
+
   const key = extractKey(req);
   if (!key) {
     res.status(401).json({
@@ -53,7 +66,6 @@ export async function apiKeyAuth(
   const keyHash = hashKey(key);
 
   try {
-    // Reset the window in the same statement if it has elapsed, then return the row.
     const { rows } = await pool.query<{
       id: string;
       name: string;
@@ -74,7 +86,6 @@ export async function apiKeyAuth(
 
     const client = rows[0];
     if (!client) {
-      // Same response for unknown and inactive keys — don't leak which.
       res.status(401).json({
         error: { message: "Invalid API key.", code: "AUTH_INVALID" },
       });
@@ -101,10 +112,7 @@ export async function apiKeyAuth(
     };
     next();
   } catch (err) {
-    console.error(
-      "[auth] Database error during authentication:",
-      err instanceof Error ? err.message : err
-    );
+    console.error("[auth] DB error:", err instanceof Error ? err.message : err);
     res.status(503).json({
       error: { message: "Authentication service unavailable.", code: "AUTH_UNAVAILABLE" },
     });
@@ -112,12 +120,12 @@ export async function apiKeyAuth(
 }
 
 /**
- * Atomically consume one unit of quota for a client, guarding against the race
- * where concurrent requests slip past the read check. Returns the remaining
- * quota, or `null` if the client just hit their limit (caller may 429).
- * Call this only after a successful generation.
+ * Consume one quota unit after a successful generation.
+ * Returns remaining quota, or null if the client hit their limit.
+ * No-op when auth is disabled.
  */
 export async function consumeQuota(clientId: string): Promise<number | null> {
+  if (!isAuthRequired()) return null;
   const { rows } = await pool.query<{ remaining: number }>(
     `UPDATE api_clients
         SET quota_used = quota_used + 1
