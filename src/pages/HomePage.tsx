@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ServerOff } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { PitchForm } from "@/features/pitch-generator/components/PitchForm";
@@ -10,28 +10,45 @@ import { useHistory } from "@/features/history/hooks/useHistory";
 import { pitchApi, type ProviderInfo } from "@/services/api/pitch";
 import type { PitchFormValues, GeneratedPitch } from "@/types";
 
-/** Fallback providers shown while the backend /providers call is in-flight or fails. */
-const FALLBACK_PROVIDERS: ProviderInfo[] = [
-  { id: "openai",    label: "OpenAI",    description: "GPT-4o",            isLocal: false, configured: true },
-  { id: "anthropic", label: "Anthropic", description: "Claude 3.5 Sonnet", isLocal: false, configured: true },
+/**
+ * All known providers with configured:false.
+ * Shown while the backend /providers call is in-flight OR if it fails.
+ * This ensures the full provider list is always visible — configured ones
+ * will be updated once the server responds.
+ */
+const ALL_KNOWN_PROVIDERS: ProviderInfo[] = [
+  { id: "openai",     label: "OpenAI",     description: "GPT-4o — OpenAI flagship model",         isLocal: false, configured: false },
+  { id: "anthropic",  label: "Anthropic",  description: "Claude 3.5 Sonnet — Anthropic",           isLocal: false, configured: false },
+  { id: "groq",       label: "Groq",       description: "Llama 3.3 70B — ultra-fast inference",    isLocal: false, configured: false },
+  { id: "mistral",    label: "Mistral",    description: "Mistral Large — European AI",              isLocal: false, configured: false },
+  { id: "openrouter", label: "OpenRouter", description: "Multi-model gateway",                      isLocal: false, configured: false },
+  { id: "xai",        label: "xAI Grok",  description: "Grok 2 — xAI",                             isLocal: false, configured: false },
+  { id: "deepseek",   label: "DeepSeek",  description: "DeepSeek Chat — cost-efficient",           isLocal: false, configured: false },
+  { id: "together",   label: "Together",   description: "Llama 3.3 70B — Together AI",             isLocal: false, configured: false },
+  { id: "fireworks",  label: "Fireworks",  description: "Llama 3.3 70B — Fireworks AI",            isLocal: false, configured: false },
+  { id: "ollama",     label: "Ollama",     description: "Local model — runs on your machine",       isLocal: true,  configured: false },
+  { id: "rodium",     label: "RodiumAI",  description: "Claude via RodiumAI proxy",                isLocal: false, configured: false },
 ];
 
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const { pitch, isLoading, error, generate, reset } = usePitchGenerator();
   const { savePitch } = useHistory();
-  const [availableProviders, setAvailableProviders] = useState<ProviderInfo[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<ProviderInfo[]>(ALL_KNOWN_PROVIDERS);
+  const [serverError, setServerError] = useState(false);
   const [lastValues, setLastValues] = useState<PitchFormValues | null>(null);
   const [requestedProvider, setRequestedProvider] = useState<string | undefined>();
 
   useEffect(() => {
+    setServerError(false);
     pitchApi
       .getProviders()
       .then(({ providers }) => {
-        setAvailableProviders(providers.length > 0 ? providers : FALLBACK_PROVIDERS);
+        setAvailableProviders(providers.length > 0 ? providers : ALL_KNOWN_PROVIDERS);
       })
       .catch(() => {
-        setAvailableProviders(FALLBACK_PROVIDERS);
+        // Keep ALL_KNOWN_PROVIDERS (all disabled) so the user still sees the full list
+        setServerError(true);
       });
   }, []);
 
@@ -65,6 +82,16 @@ export function HomePage() {
       </section>
 
       <Separator />
+
+      {/* Server unreachable warning */}
+      {serverError && (
+        <Alert variant="destructive">
+          <ServerOff className="h-4 w-4" />
+          <AlertDescription>
+            Backend server unreachable — start it with <code className="mx-1 rounded bg-destructive/20 px-1 text-xs">cd server &amp;&amp; npm run dev</code> then refresh.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Form */}
       {!pitch && (
