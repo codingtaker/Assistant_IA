@@ -19,6 +19,7 @@ import type { PitchFormValues, GeneratedPitch } from "@/types";
 const ALL_KNOWN_PROVIDERS: ProviderInfo[] = [
   { id: "openai",     label: "OpenAI",     description: "GPT-4o — OpenAI flagship model",       isLocal: false, configured: false },
   { id: "anthropic",  label: "Anthropic",  description: "Claude 3.5 Sonnet — Anthropic",         isLocal: false, configured: false },
+  { id: "gemini",     label: "Google Gemini", description: "Gemini 2.0 Flash — Google AI",          isLocal: false, configured: false },
   { id: "groq",       label: "Groq",       description: "Llama 3.3 70B — ultra-fast inference",  isLocal: false, configured: false },
   { id: "mistral",    label: "Mistral",    description: "Mistral Large — European AI",            isLocal: false, configured: false },
   { id: "openrouter", label: "OpenRouter", description: "Multi-model gateway",                    isLocal: false, configured: false },

@@ -38,6 +38,12 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     baseURL: "https://api.groq.com/openai/v1",
     defaultModel: "llama-3.3-70b-versatile",
   },
+  // Google Gemini via its OpenAI-compatible endpoint
+  gemini: {
+    kind: "openai-compatible",
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-2.0-flash",
+  },
   openrouter: {
     kind: "openai-compatible",
     baseURL: "https://openrouter.ai/api/v1",
@@ -101,51 +107,34 @@ function parseHeaders(raw: string | undefined): Record<string, string> | undefin
 
 /**
  * Build one provider from env, using a preset when available.
- * Returns `null` and logs a warning when configuration is incomplete.
+ * Returns `null` when configuration is incomplete.
  */
-function buildProvider(
-  id: string,
-  env: NodeJS.ProcessEnv
-): AIProvider | null {
+function buildProvider(id: string, env: NodeJS.ProcessEnv): AIProvider | null {
   const key = envKey(id);
   const preset = PROVIDER_PRESETS[id];
   const kind: ProviderKind = preset?.kind ?? "openai-compatible";
 
-  // Built-in providers manage their own env checks (they read process.env directly).
   if (kind === "openai") return new OpenAIProvider();
   if (kind === "anthropic") return new AnthropicProvider();
 
-  // OpenAI-compatible: need at least an API key. baseURL + model may come from preset.
   const apiKey = env[`${key}_API_KEY`];
   const baseURL = env[`${key}_BASE_URL`] ?? preset?.baseURL;
   const defaultModel = env[`${key}_MODEL`] ?? preset?.defaultModel;
   const defaultHeaders =
     parseHeaders(env[`${key}_HEADERS`]) ?? preset?.defaultHeaders;
 
-  if (!apiKey) {
-    // Silently skip — provider is listed in presets but no key configured
-    return null;
-  }
+  if (!apiKey) return null;
+
   if (!baseURL) {
-    console.warn(
-      `[AI] Provider "${id}" skipped: missing ${key}_BASE_URL (no preset available)`
-    );
+    console.warn(`[AI] Provider "${id}" skipped: missing ${key}_BASE_URL`);
     return null;
   }
   if (!defaultModel) {
-    console.warn(
-      `[AI] Provider "${id}" skipped: missing ${key}_MODEL (no preset available)`
-    );
+    console.warn(`[AI] Provider "${id}" skipped: missing ${key}_MODEL`);
     return null;
   }
 
-  return new OpenAICompatibleProvider({
-    name: id,
-    apiKey,
-    baseURL,
-    defaultModel,
-    defaultHeaders,
-  });
+  return new OpenAICompatibleProvider({ name: id, apiKey, baseURL, defaultModel, defaultHeaders });
 }
 
 export interface ProviderRegistry {
@@ -157,20 +146,11 @@ export interface ProviderRegistry {
 
 /**
  * Discover and instantiate every configured provider from environment variables.
- *
- * Discovery order:
- *   1. `openai` and `anthropic` are tried first (built-in providers).
- *   2. All remaining PROVIDER_PRESETS are auto-discovered: if <ID>_API_KEY is
- *      present in the environment the provider is registered automatically.
- *      No need to list anything in EXTRA_PROVIDERS for preset providers.
- *   3. `EXTRA_PROVIDERS=comma,separated,list` can add non-preset custom providers.
- *   4. `PROVIDER_FALLBACK_ORDER=a,b,c` overrides the fallback order.
- *   5. `DEFAULT_AI_PROVIDER=<id>` selects the primary provider (default: first available).
+ * Any preset provider with <ID>_API_KEY set is registered automatically.
  */
 export function buildProviderRegistry(
   env: NodeJS.ProcessEnv = process.env
 ): ProviderRegistry {
-  // 1. Start with built-ins, then all presets, then any EXTRA_PROVIDERS.
   const orderedIds: string[] = ["openai", "anthropic"];
   for (const id of Object.keys(PROVIDER_PRESETS)) {
     if (!orderedIds.includes(id)) orderedIds.push(id);
@@ -188,7 +168,6 @@ export function buildProviderRegistry(
     const provider = buildProvider(id, env);
     if (!provider) continue;
     providers.set(id, provider);
-
     if (provider.isAvailable()) {
       const preset = PROVIDER_PRESETS[id];
       const info = preset?.baseURL ? ` -> ${preset.baseURL}` : "";
@@ -196,19 +175,15 @@ export function buildProviderRegistry(
     }
   }
 
-  // 2. Explicit fallback order overrides default (insertion order of available providers).
   const rawOrder = (env.PROVIDER_FALLBACK_ORDER ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const availableIds = orderedIds.filter((id) =>
-    providers.get(id)?.isAvailable()
-  );
+  const availableIds = orderedIds.filter((id) => providers.get(id)?.isAvailable());
   const fallbackOrder = rawOrder.length
     ? rawOrder.filter((id) => availableIds.includes(id))
     : availableIds;
 
-  // 3. Default provider.
   const defaultProvider = env.DEFAULT_AI_PROVIDER ?? fallbackOrder[0] ?? "openai";
 
   return { providers, defaultProvider, fallbackOrder };
