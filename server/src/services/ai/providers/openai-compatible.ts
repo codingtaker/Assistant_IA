@@ -20,12 +20,6 @@ export interface OpenAICompatibleConfig {
 
 /**
  * Generic provider for any OpenAI-compatible API:
- *   - OpenAI itself
- *   - RodiumAI (https://api.rodiumai.io/v1)
- *   - Groq (https://api.groq.com/openai/v1)
- *   - OpenRouter (https://openrouter.ai/api/v1)
- *   - xAI (https://api.x.ai/v1)
- *   - Together, Fireworks, DeepSeek, Mistral, Ollama, LM Studio, vLLM, …
  */
 export class OpenAICompatibleProvider implements AIProvider {
   readonly name: string;

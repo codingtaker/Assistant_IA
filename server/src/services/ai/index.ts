@@ -13,10 +13,6 @@ interface ProviderAttempt {
   retryable: boolean;
 }
 
-/**
- * Aggregated error thrown when every provider attempt fails.
- * Exposes the full chain of attempts for logging / debugging.
- */
 export class AIAllProvidersFailedError extends Error {
   readonly statusCode: number;
   readonly attempts: ProviderAttempt[];
@@ -34,8 +30,6 @@ export class AIAllProvidersFailedError extends Error {
 
 /**
  * Error codes that indicate a billing / credit problem on the current provider.
- * OpenAI  — err.code === "insufficient_quota"
- * Anthropic — HTTP 400 with message "credit balance is too low"
  */
 const BILLING_ERROR_CODES = new Set([
   "insufficient_quota",
@@ -49,9 +43,6 @@ const BILLING_ERROR_CODES = new Set([
 
 /**
  * Regex covering billing-related phrases across providers:
- *   - OpenAI:     "You exceeded your current quota"
- *   - Anthropic:  "Your credit balance is too low"  /  "Plans & Billing"
- *   - Groq/etc.:  "out of credits", "billing limit", "payment required"
  */
 const BILLING_MESSAGE_RE =
   /insufficient.*(quota|credit|fund|balance)|credit balance|balance is too low|out of credit|billing limit|payment required|plans.*billing|upgrade.*credit|purchase.*credit/i;
@@ -90,8 +81,6 @@ function isBillingError(err: unknown): boolean {
 
 /**
  * Decide whether an error is transient and worth retrying on another provider.
- * Retry on: 402, 408, 429, 5xx, network errors, billing/credit errors.
- * Do NOT retry on: 400, 401, 403, 404, other 4xx.
  */
 function isRetryableError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -282,8 +271,4 @@ export class AIService {
   }
 }
 
-/**
- * Application-wide singleton. Built once at startup from environment variables.
- * Import this instead of instantiating AIService directly.
- */
 export const aiService = new AIService(buildProviderRegistry());
